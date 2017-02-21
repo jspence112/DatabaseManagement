@@ -3,11 +3,12 @@ Select Agents.city from Agents, Orders
 Where Agents.aid = Orders.aid and Orders.cid = 'c006';
 
 --2.
---Currently returns three aid of agents who took orders from a customer in Kyoto.
-Select Distinct Orders.aid
+Select Distinct Orders.pid
 from Orders
-inner join Customers on Customers.city = 'Kyoto' and
-Customers.cid = Orders.cid;
+inner join (Orders Orders2 inner join Customers on
+Customers.city = 'Kyoto' and Customers.cid = Orders2.cid) on 
+Orders.aid = Orders2.aid
+Order by pid DESC;
 
 --3.
 Select Distinct Customers.name from Customers, Orders
@@ -36,3 +37,10 @@ Orders o inner join Customers  c on o.cid = c.cid
 where Customers.city = Agents.city;
 
 --7.
+Select Customers.name, Customers.city from Customers 
+inner join (
+Select city, count(city)as count
+from Products
+group by city
+limit 1) tbl on tbl.city = Customers.city;
+
