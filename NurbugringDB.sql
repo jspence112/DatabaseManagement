@@ -105,7 +105,6 @@ CREATE TABLE Car (
   Brandid 			INT NOT NULL REFERENCES Brand(Brandid),
   Model_Name 		TEXT NOT NULL,
   Secondary_Name	TEXT,
-  Fastest			BOOLEAN NOT NULL,
   Model_Year 		SMALLINT NOT NULL CHECK(Model_Year > 1900),
   Weightlbs  		INT NOT NULL CHECK(Weightlbs > 0),
   Base_PriceUSD 	INT NOT NULL,
@@ -122,6 +121,7 @@ LapTimeSeconds		SMALLINT NOT NULL CHECK(LapTimeSeconds > 0),
 LapDate				date NOT NULL CHECK(LapDate > '1900-01-01'),
 LapVideoLink		TEXT,
 LapLengthFeet		INT NOT NULL CHECK(LapLengthFeet > 0),
+Fastest				BOOLEAN NOT NULL,
 PRIMARY KEY(Lapid)
 );
 
@@ -165,18 +165,18 @@ INSERT INTO Transmission VALUES(0, 'double clutch', 7),
 							   (1, 'direct drive', 1),
 							   (2, 'manual', 6);
 							   
-INSERT INTO Car VALUES(0, 0, '458', 'italia', FALSE, '2015',
+INSERT INTO Car VALUES(0, 0, '458', 'italia', '2015',
 						3100, 300000, 'rear', 0, 0, 0),
-						(1, 0, '458', 'speciale', TRUE, '2016',
+						(1, 0, '458', 'speciale', '2016',
 						3000, 400000, 'rear', 2, 2, 2),
-						(2, 1, 'huracan', 'performante', FALSE,
+						(2, 1, 'huracan', 'performante',
 						'2017', 3400, 415000, 'all', 1, 1, 1);
 						
 INSERT INTO Lap	VALUES(0, 410, '2017-03-05', 'https://www.youtube.com/watch?v=6ULSUcERlQQ',
-					   67600),
+					   67600, TRUE),
 					  (1, 440, '2016-06-11', 'https://www.youtube.com/watch?v=5gEdJmIVqLY',
-					  67600),
-					  (2, 445, '2015-8-01', NULL, 68346);						
+					  67600, FALSE),
+					  (2, 445, '2015-8-01', NULL, 68346, FALSE);						
 						
 INSERT INTO LapRecord VALUES(1, 0, 0, 1, 'What amazing driving skills!'),
 							(0, 1, 1, 0, NULL),
@@ -255,31 +255,59 @@ FETCH ALL FROM results;
 EXECUTE PROCEDURE
 
 /* Triggers */
-CREATE OR REPLACE FUNCTION fastestCar() RETURNS TRIGGER AS
+
+CREATE OR REPLACE FUNCTION fastestLap() RETURNS TRIGGER AS
 $$
 BEGIN
-IF (SELECT LaptimeSeconds
-	FROM Lap, Car, LapRecord
-	WHERE LapRecord.carid=Car.Carid AND Lap.lapid=LapRecord.lapid
-	AND NEW.Carid=LapRecord.Carid) 
-    <=
+IF NEW.LapTimeSeconds <=
 	(SELECT LapTimeSeconds
 	FROM Lap
 	ORDER BY LapTimeSeconds ASC
 	Limit 1)
 THEN
-	UPDATE Car
+	UPDATE Lap
 	SET Fastest = TRUE
-	WHERE Car.carid=New.carid;
+	WHERE Lap.lapid=New.lapid;
 	END IF;
 	RETURN NEW;
 	END;
 $$LANGUAGE plpgsql;
 
-CREATE TRIGGER fastestCar
-After INSERT ON LapRecord
+CREATE TRIGGER fastestLap
+After INSERT ON Lap
 FOR EACH ROW
-EXECUTE PROCEDURE fastestCar();
+EXECUTE PROCEDURE fastestLap();
+
+CREATE OR REPLACE FUNCTION lastFastestLap() RETURNS TRIGGER AS
+$$
+BEGIN
+IF (Select Fastest
+	From Lap
+	Order by LapTimeSeconds ASC
+	Limit 1) = True
+	AND
+	(Select Fastest
+	From Lap
+	Order by LapTimeSeconds ASC
+	Offset 1
+	Limit 1) = True 
+THEN
+	UPDATE Lap
+	SET Fastest = False
+	WHERE Lap.lapid=(Select Lapid
+					From Lap
+					Order by LapTimeSeconds ASC
+					Offset 1
+					Limit 1);
+	END IF;
+	RETURN NEW;
+	END;
+$$LANGUAGE plpgsql;
+
+CREATE TRIGGER lastFastestLap
+After INSERT ON Lap
+FOR EACH ROW
+EXECUTE PROCEDURE fastestLap();
 
 /*Sample Reports */
 SELECT Brand_Name, Model_Name, Secondary_Name, Motor_Type, HorsepowerBHP, Torque_lb_ft,
